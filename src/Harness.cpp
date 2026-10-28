@@ -408,9 +408,15 @@ std::string compileTranslationUnits(const WorkDirectory& work,
                                      const std::vector<std::string>& extraFlags = {}) {
   const auto sourceDirectory = std::filesystem::path{work.tree() / "src"};
   const auto diagnosticsPath = std::filesystem::path{work.scratch() / "cc.err"};
+  // runProcess calls execvp directly, so a value such as "-O3 -march=native"
+  // must become two arguments before it reaches the compiler.
+  auto buildArguments = std::vector<std::string>{compiler};
+  auto optimizationFlags = std::istringstream{optimizationFlag};
+  auto flag = std::string{};
+  while (optimizationFlags >> flag) buildArguments.push_back(flag);
+  buildArguments.insert(buildArguments.end(), {standardFlag, "-I" + sourceDirectory.string()});
   for (const std::string& stem : stems) {
-    auto argv = std::vector<std::string>{compiler, optimizationFlag, standardFlag,
-                                         "-I" + sourceDirectory.string()};
+    auto argv = buildArguments;
     for (const std::string& flag : extraFlags) argv.push_back(flag);
     argv.insert(argv.end(), {"-fPIC", "-fvisibility=hidden", "-c",
                              (sourceDirectory / (stem + ".cpp")).string(), "-o",
@@ -1537,7 +1543,7 @@ int main(int argc, char** argv) {
   auto standardOverride = std::optional<std::string>{};
   auto optimizationOverride = std::optional<std::string>{};
   app.add_option("--cxxstd", standardOverride, "language standard flag (default -std=c++17)");
-  app.add_option("--opt", optimizationOverride, "optimization flag (default -O2)");
+  app.add_option("--opt", optimizationOverride, "whitespace-separated optimization flags (default -O2)");
 
   auto initOptions = InitOptions{};
   auto* init = app.add_subcommand("init", "Copy the SDK, link the reference library and run a null measurement");
